@@ -68,7 +68,7 @@
       tableData: {
         immediate: true,
         handler (newVal, oldVal) {
-          if (!this.byOwnerAction) {
+          if (!this.byOwnerAction && newVal !== oldVal) {
             this.init()
           }
           this.byOwnerAction = false
