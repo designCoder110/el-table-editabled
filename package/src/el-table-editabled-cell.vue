@@ -85,6 +85,12 @@
 </script>
 
 <style>
+  /* 解决 使用el-table的show-overflow-tooltip的样式问题 */
+  .cell.el-tooltip .el-table-editabled-cell__content {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .el-table-editabled-cell__content {
     outline: 0!important;
   }
