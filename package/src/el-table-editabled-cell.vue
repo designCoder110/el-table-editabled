@@ -78,18 +78,7 @@
     },
     methods: {
       validateOwn (cb) {
-        this.editValidator.validateCell(this.row, this.prop)
-          .then(errorMsg => {
-            let valid
-
-            if (errorMsg) {
-              valid = false
-            } else {
-              valid = true
-            }
-
-            typeof cb === 'function' && cb(valid)
-          })
+        this.editValidator.validateCells([this.row], [this.prop], cb)
       }
     }
   }

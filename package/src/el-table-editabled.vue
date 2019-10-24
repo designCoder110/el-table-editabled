@@ -230,7 +230,15 @@
         this.editRows(rows)
       },
 
-      async validateRows (rows, cb) {
+      validateRows (rows, cb) {
+        this.validateCells(rows, this.columns, cb)
+      },
+
+      validate (cb) {
+        this.validateRows(this.tableData, cb)
+      },
+
+      async validateCells (rows, props, cb) {
         let validatePromiseStacks = []
         let valid
 
@@ -238,19 +246,28 @@
           const cellStates = this.store.getStates(row)
           const rowStates = cellStates._states
 
-          this.columns.forEach(prop => {
+          props.forEach(prop => {
+            const validator = this.validators[prop]
             const ownStates = cellStates ? cellStates[prop] : {}
 
-            if ((ownStates.editing || rowStates.editing) && this.validators[prop]) {
-              validatePromiseStacks.push(new Promise((resolve, reject) => {
-                this.validateCell(row, prop).then(errorMsg => {
-                  if (errorMsg) {
-                    reject()
-                  } else {
-                    resolve()
+            if ((ownStates.editing || rowStates.editing) && validator) {
+              const validPropPromise = new Promise((resolve, reject) => {
+                const next = (errorMsg) => {
+                  if (ownStates.editing || rowStates.editing) {
+                    ownStates.validateMsg = errorMsg
+
+                    if (errorMsg) {
+                      reject()
+                    } else {
+                      resolve()
+                    }
                   }
-                })
-              }))
+                }
+
+                validator(row, next, rowStates, cellStates)
+              })
+
+              validatePromiseStacks.push(validPropPromise)
             }
           })
         })
@@ -263,27 +280,35 @@
           valid = false
         }
 
-        cb(valid)
+        typeof cb === 'function' && cb(valid)
       },
 
-      validate (cb) {
-        this.validateRows(this.tableData, cb)
-      },
+      getTableEditState () {
+        const {
+          tableData,
+          columns,
+          store
+        } = this
+        let tableEditing = false
 
-      validateCell (row, prop) {
-        const validator = this.validators[prop]
-        const cellStates = this.store.getStates(row)
-        const rowStates = cellStates._states
-        const ownStates = cellStates ? cellStates[prop] : {}
+        for (let rowIdx = 0;rowIdx < tableData.length;rowIdx++) {
+          const row = tableData[rowIdx]
+          const cellStates = store.getStates(row)
+          const rowStates = cellStates._states
+          
+          // if current row is editing
+          if (rowStates.editing) return true
 
-        return new Promise(resolve => {
-          validator(row, (errorMsg) => {
-            if (ownStates.editing || rowStates.editing) {
-              ownStates.validateMsg = errorMsg
-              resolve(errorMsg)
-            }
-          }, rowStates, cellStates)
-        })
+          for (let columnIdx = 0;columnIdx < columns.length;columnIdx++) {
+            const prop = columns[columnIdx]
+            const cellState = cellStates[prop]
+
+            // if current prop is editing
+            if (cellState.editing) return true
+          }
+        }
+        
+        return tableEditing
       }
     }
   }
