@@ -168,7 +168,7 @@
           if (valid) {
             this.$message.success('保存成功')
 
-            this.editTable.cancelCells([row], [cell], false)
+            this.editTable.saveCells([row], [cell])
           } else {
             this.$message.error('校验不通过')
           }

@@ -167,7 +167,7 @@
       handleSave () {
         // 保存数据前先进行数据验证
         this.handleValidate(() => {
-          this.editTable.cancelRows(this.tableData, false)
+          this.editTable.saveRows(this.tableData)
         })
       },
       handleValidate (successCb) {

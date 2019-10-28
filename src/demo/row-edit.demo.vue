@@ -166,7 +166,7 @@
           // valid 为布尔值 代表表格正在编辑的所有字段是否验证通过
           if (valid) {
             // 第二个参数为 是否回退数据 若传false 则只取消编辑状态 编辑的数据会保存
-            this.editTable.cancelRows([row], false)
+            this.editTable.saveRows([row])
           }
         })
       },

@@ -77,30 +77,34 @@
     },
     methods: {
       init () {
-        this.tableCacheData = new Map()
-        const cellStates = {}
+        this.tableCacheData = new WeakMap()
+        const cellStatesCreator = {}
 
-        this.columns.forEach(prop => {
-          const cellStatesCreator = this.cellStates[prop]
+        this.columns.forEach(cell => {
+          const initCellStates = this.cellStates[cell]
 
-          cellStates[prop] = row => {
-            return observable(Object.assign({
+          cellStatesCreator[cell] = row => {
+            const ownStates = Object.assign({
               editing: this.defaultEditing,
               validateMsg: '',
               hovering: false
-            }, cellStatesCreator && cellStatesCreator(row)))
+            }, initCellStates && initCellStates(row))
+
+            return observable(ownStates)
           }
         })
 
         this.store = new TabelStore({
           tableData: this.tableData,
           columns: this.columns,
-          rowStatesCreator: (row) => {
-            return observable(Object.assign({
+          rowStatesCreator: row => {
+            const rowStates = Object.assign({
               editing: this.defaultEditing
-            }, this.rowStates(row)))
+            }, this.rowStates(row))
+
+            return observable(rowStates)
           },
-          cellStatesCreator: cellStates,
+          cellStatesCreator,
           onInitLoop: (row) => {
             // 在初始化表格状态遍历表格数据的时候去初始化表格缓存数据
             this.updateTableCache([row], 'add')
@@ -128,31 +132,16 @@
         })
       },
 
-      cancelRows (rows, cancelData = true) {
-        const {
-          tableCacheData,
-          store
-        } = this
+      saveRows (rows) {
+        this.saveCells(rows, this.columns)
+      },
 
-        rows.forEach(row => {
-          const rowCacheData = tableCacheData.get(row)
-          // 数据回滚
-          if (cancelData && rowCacheData) {
-            Object.assign(row, rowCacheData)
-          }
+      saveCells (rows, cells) {
+        this.cancelCells(rows, cells, false)
+      },
 
-          // 更新缓存 防止字段的值是引用类型 导致修改数据的时候缓存也会被修改
-          this.updateTableCache([row], 'update')
-
-          // 取消编辑状态并重置表单验证状态
-          store.setRowsStates([row], {
-            editing: false
-          })
-          store.setCellStates([row], this.columns, {
-            editing: false,
-            validateMsg: ''
-          })
-        })
+      cancelRows (rows) {
+        this.cancelCells(rows, this.columns)
       },
 
       cancelCells (rows, cells, cancelData = true) {
@@ -166,18 +155,27 @@
 
           cells.forEach(cell => {
             // 数据回滚
-            if (cancelData && rowCacheData && rowCacheData[cell]) {
-              row[cell] = rowCacheData[cell]
+            if (cancelData && rowCacheData) {
+              if (cell in rowCacheData) {
+                row[cell] = rowCacheData[cell]
+              } else {
+                delete row[cell]
+              }
             }
-
-            // 更新缓存
-            this.updateTableCache([row], 'update')
 
             // 取消单元格编辑状态并重置表单验证状态
             store.setCellStates([row], [cell], {
               editing: false,
               validateMsg: ''
             })
+          })
+
+          // 更新缓存 防止字段的值是引用类型 导致修改数据的时候缓存也会被修改
+          this.updateTableCache([row], 'update')
+
+          // 取消行编辑状态
+          store.setRowsStates([row], {
+            editing: false
           })
         })
       },
@@ -198,35 +196,33 @@
       },
 
       newRows (rows) {
-        this.byOwnerAction = true
+        const firstRow = this.tableData[0]
 
-        this.updateTableCache(rows, 'add')
-        this.store.addStates(rows)
-        this.tableData.splice(0, 0, ...rows)
-
-        this.editRows(rows)
+        this.insertRowsBeforeRow(firstRow, rows)
       },
 
       insertRowsBeforeRow (row, rows) {
-        this.insertRows(row, rows, 'before')
+        this.insertRows('before', row, rows)
       },
 
       insertRowsAfterRow (row, rows) {
-        this.insertRows(row, rows, 'after')
+        this.insertRows('after', row, rows)
       },
 
-      insertRows (row, rows, type) {
+      insertRows (type, row, rows) {
+        let insertIdx
+
+        insertIdx = this.tableData.findIndex((_row) => _row === row)
+        if (insertIdx === -1) {
+          insertIdx = 0
+        } else if (type === 'after'){
+          insertIdx++
+        }
+        
         this.byOwnerAction = true
+        this.tableData.splice(insertIdx, 0, ...rows)
         this.store.addStates(rows)
         this.updateTableCache(rows, 'add')
-
-        this.tableData.find((_row, idx) => {
-          if (row === _row) {
-            this.tableData.splice(type === 'before' ? idx : idx + 1, 0, ...rows)
-            return true
-          }
-        })
-
         this.editRows(rows)
       },
 
@@ -238,7 +234,7 @@
         this.validateRows(this.tableData, cb)
       },
 
-      async validateCells (rows, props, cb) {
+      async validateCells (rows, cells, cb) {
         let validatePromiseStacks = []
         let valid
 
@@ -246,9 +242,9 @@
           const cellStates = this.store.getStates(row)
           const rowStates = cellStates._states
 
-          props.forEach(prop => {
-            const validator = this.validators[prop]
-            const ownStates = cellStates ? cellStates[prop] : {}
+          cells.forEach(cell => {
+            const validator = this.validators[cell]
+            const ownStates = cellStates ? cellStates[cell] : {}
 
             if ((ownStates.editing || rowStates.editing) && validator) {
               const validPropPromise = new Promise((resolve, reject) => {
@@ -300,8 +296,8 @@
           if (rowStates.editing) return true
 
           for (let columnIdx = 0;columnIdx < columns.length;columnIdx++) {
-            const prop = columns[columnIdx]
-            const cellState = cellStates[prop]
+            const cell = columns[columnIdx]
+            const cellState = cellStates[cell]
 
             // if current prop is editing
             if (cellState.editing) return true
